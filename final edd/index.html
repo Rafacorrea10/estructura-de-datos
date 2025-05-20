@@ -2,8 +2,8 @@
 <html lang="es">
 
 <head>
-  <meta charset="UTF-8" />
-  <title>Mapa Firebase Completo</title>
+  <meta charset="UTF-8">
+  <title>RADA - Rutas y Análisis</title>
   <style>
     html,
     body {
@@ -33,8 +33,8 @@
     }
 
     h3 {
-      margin-top: 0;
       color: #2b8bff;
+      margin-top: 0;
     }
 
     button,
@@ -87,23 +87,21 @@
 
 <body>
   <div id="panel">
-    <h3>🗺️ Rutas con Firebase</h3>
+    <h3>RADA - Rutas con Firebase</h3>
     <label for="modoTransporte">Modo de transporte:</label>
     <select id="modoTransporte">
-      <option value="DRIVING">🚗 Carro</option>
-      <option value="WALKING">🚶 A pie</option>
+      <option value="DRIVING">Carro</option>
+      <option value="WALKING">A pie</option>
     </select>
     <div id="distancia"></div>
-    <button onclick="calcularRuta()">📏 Calcular ruta</button>
-    <button onclick="guardarRuta()">💾 Guardar ruta</button>
-    <button onclick="cargarRutas()">📂 Cargar rutas guardadas</button>
-    <button onclick="reiniciar()">♻️ Reiniciar todo</button>
-
+    <button onclick="calcularRuta()">Calcular ruta</button>
+    <button onclick="guardarRuta()">Guardar ruta</button>
+    <button onclick="cargarRutas()">Cargar rutas guardadas</button>
+    <button onclick="reiniciar()">Reiniciar todo</button>
     <label>Nodos actuales:</label>
     <div id="nodosLista">
       <ol></ol>
     </div>
-
     <label>Rutas guardadas:</label>
     <div id="rutasGuardadas">
       <ul></ul>
@@ -111,10 +109,10 @@
   </div>
   <div id="map"></div>
 
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
-    import { getFirestore, collection, addDoc, getDocs, Timestamp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
+  <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore-compat.js"></script>
 
+  <script>
     const firebaseConfig = {
       apiKey: "AIzaSyD-j4owQXGcVgoOAT2w7CDz0uhbPeqnxfE",
       authDomain: "final-edd.firebaseapp.com",
@@ -124,47 +122,9 @@
       appId: "1:69059425411:web:9caccb1309a6e2ab0f57b6",
       measurementId: "G-B2SZ97ZEXM"
     };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
 
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
-
-    window.guardarRuta = async function () {
-      if (nodos.length < 2) return alert("Agrega mínimo 2 nodos.");
-      const seleccionados = nodos.filter(n => n.seleccionado);
-      const nombreRuta = prompt("Nombre de la ruta:");
-      if (!nombreRuta) return;
-      const ruta = {
-        nombre: nombreRuta,
-        fecha: Timestamp.now(),
-        distancia: distanciaTexto,
-        tiempo: tiempoTexto,
-        nodos: seleccionados.map((n, i) => ({ nombre: n.nombre, lat: n.lat, lng: n.lng, orden: i }))
-      };
-      await addDoc(collection(db, "Rutas"), ruta);
-      alert("✅ Ruta guardada.");
-    };
-
-    window.cargarRutas = async function () {
-      const querySnapshot = await getDocs(collection(db, "Rutas"));
-      const lista = document.querySelector("#rutasGuardadas ul");
-      lista.innerHTML = "";
-      querySnapshot.forEach(doc => {
-        const data = doc.data();
-        const li = document.createElement("li");
-        li.innerHTML = `<span><b>${data.nombre}</b> (${data.distancia}, ${data.tiempo})</span>
-                    <button class="btnSmall" onclick='verRuta(${JSON.stringify(data.nodos)})'>👁️ Ver</button>`;
-        lista.appendChild(li);
-      });
-    };
-
-    window.verRuta = function (nuevaRuta) {
-      nodos = nuevaRuta.map(n => ({ ...n, seleccionado: true }));
-      actualizarLista();
-      calcularRuta();
-    };
-  </script>
-
-  <script>
     let map, nodos = [], directionsService, directionsRenderer;
     let distanciaTexto = "", tiempoTexto = "";
 
@@ -188,55 +148,45 @@
       nodos.forEach((n, i) => {
         const li = document.createElement("li");
         li.innerHTML = `<span>
-      <input type="checkbox" onchange="toggleSeleccion(${i})" ${n.seleccionado ? "checked" : ""}>
-      <b>${n.nombre}</b>
-    </span>
-    <span>
-      <button class="btnSmall" onclick="mover(${i}, -1)">⬆️</button>
-      <button class="btnSmall" onclick="mover(${i}, 1)">⬇️</button>
-      <button class="btnSmall" onclick="editar(${i})">✏️</button>
-      <button class="btnSmall" onclick="eliminar(${i})">🗑️</button>
-    </span>`;
+          <input type="checkbox" onchange="toggleSeleccion(${i})" ${n.seleccionado ? "checked" : ""}>
+          <b>${n.nombre}</b>
+        </span>
+        <span>
+          <button class="btnSmall" onclick="mover(${i}, -1)">⬆️</button>
+          <button class="btnSmall" onclick="mover(${i}, 1)">⬇️</button>
+          <button class="btnSmall" onclick="editar(${i})">✏️</button>
+          <button class="btnSmall" onclick="eliminar(${i})">🗑️</button>
+        </span>`;
         lista.appendChild(li);
       });
     }
 
     function toggleSeleccion(i) { nodos[i].seleccionado = !nodos[i].seleccionado; }
-
-    function mover(i, dir) {
-      const j = i + dir;
-      if (j >= 0 && j < nodos.length) {
-        [nodos[i], nodos[j]] = [nodos[j], nodos[i]];
-        actualizarLista();
-      }
-    }
-
-    function editar(i) {
-      const nuevo = prompt("Nuevo nombre:", nodos[i].nombre);
-      if (nuevo) { nodos[i].nombre = nuevo; actualizarLista(); }
-    }
-
+    function mover(i, d) { const j = i + d; if (j >= 0 && j < nodos.length) { [nodos[i], nodos[j]] = [nodos[j], nodos[i]]; actualizarLista(); } }
+    function editar(i) { const nuevo = prompt("Nuevo nombre:", nodos[i].nombre); if (nuevo) { nodos[i].nombre = nuevo; actualizarLista(); } }
     function eliminar(i) { nodos.splice(i, 1); actualizarLista(); }
-
-    function reiniciar() {
-      nodos = []; directionsRenderer.set('directions', null);
-      document.getElementById("distancia").innerText = "";
-      actualizarLista();
-    }
+    function reiniciar() { nodos = []; directionsRenderer.set('directions', null); document.getElementById("distancia").innerText = ""; actualizarLista(); }
 
     function calcularRuta() {
       const seleccionados = nodos.filter(n => n.seleccionado);
       if (seleccionados.length < 2) return alert("Selecciona al menos 2 nodos.");
-      const origen = { lat: seleccionados[0].lat, lng: seleccionados[0].lng };
-      const destino = { lat: seleccionados[seleccionados.length - 1].lat, lng: seleccionados[seleccionados.length - 1].lng };
-      const waypoints = seleccionados.slice(1, -1).map(n => ({ location: { lat: n.lat, lng: n.lng }, stopover: true }));
+      const origen = seleccionados[0];
+      const destino = seleccionados[seleccionados.length - 1];
+      const waypoints = seleccionados.slice(1, -1).map(n => ({
+        location: { lat: n.lat, lng: n.lng }, stopover: true
+      }));
       const modo = document.getElementById("modoTransporte").value;
-      directionsService.route({ origin, destination, waypoints, travelMode: google.maps.TravelMode[modo] }, (result, status) => {
+      directionsService.route({
+        origin: { lat: origen.lat, lng: origen.lng },
+        destination: { lat: destino.lat, lng: destino.lng },
+        waypoints: waypoints,
+        travelMode: google.maps.TravelMode[modo]
+      }, (result, status) => {
         if (status === "OK") {
           directionsRenderer.setDirections(result);
           mostrarDistancia(result);
         } else {
-          alert("Error: " + status);
+          alert("Error al calcular ruta: " + status);
         }
       });
     }
@@ -247,10 +197,43 @@
         distancia += leg.distance.value;
         duracion += leg.duration.value;
       });
-      const km = (distancia / 1000).toFixed(2);
-      const min = Math.round(duracion / 60);
-      distanciaTexto = `${km} km`; tiempoTexto = `${min} min`;
-      document.getElementById("distancia").innerText = `📏 ${distanciaTexto} | 🕒 ${tiempoTexto}`;
+      distanciaTexto = (distancia / 1000).toFixed(2) + " km";
+      tiempoTexto = Math.round(duracion / 60) + " min";
+      document.getElementById("distancia").innerText = `Distancia: ${distanciaTexto} | Tiempo: ${tiempoTexto}`;
+    }
+
+    async function guardarRuta() {
+      if (nodos.length < 2) return alert("Agrega mínimo 2 nodos.");
+      const seleccionados = nodos.filter(n => n.seleccionado);
+      const nombreRuta = prompt("Nombre de la ruta:");
+      if (!nombreRuta) return;
+      await db.collection("Rutas").add({
+        nombre: nombreRuta,
+        fecha: new Date(),
+        distancia: distanciaTexto,
+        tiempo: tiempoTexto,
+        nodos: seleccionados.map((n, i) => ({ nombre: n.nombre, lat: n.lat, lng: n.lng, orden: i }))
+      });
+      alert("✅ Ruta guardada en Firebase.");
+    }
+
+    async function cargarRutas() {
+      const lista = document.querySelector("#rutasGuardadas ul");
+      lista.innerHTML = "";
+      const snapshot = await db.collection("Rutas").get();
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        const li = document.createElement("li");
+        li.innerHTML = `<span><b>${data.nombre}</b> (${data.distancia}, ${data.tiempo})</span>
+                        <button class="btnSmall" onclick='verRuta(${JSON.stringify(data.nodos)})'>Ver</button>`;
+        lista.appendChild(li);
+      });
+    }
+
+    function verRuta(ruta) {
+      nodos = ruta.map(n => ({ ...n, seleccionado: true }));
+      actualizarLista();
+      calcularRuta();
     }
   </script>
 
