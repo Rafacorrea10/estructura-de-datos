@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>Mapa Firebase Completo</title>
+  <style>
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      font-family: Arial;
+    }
+
+    #map {
+      height: 100%;
+      width: 100%;
+    }
+
+    #panel {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      background: white;
+      padding: 20px;
+      width: 370px;
+      max-height: 95%;
+      overflow-y: auto;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      z-index: 999;
+    }
+
+    h3 {
+      margin-top: 0;
+      color: #2b8bff;
+    }
+
+    button,
+    select {
+      width: 100%;
+      padding: 10px;
+      margin-top: 10px;
+      border: none;
+      border-radius: 6px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    button {
+      background: #2b8bff;
+      color: white;
+    }
+
+    button:hover {
+      background: #005bbb;
+    }
+
+    #nodosLista ol,
+    #rutasGuardadas ul {
+      padding-left: 18px;
+      margin: 10px 0;
+    }
+
+    li {
+      background: #f2f2f2;
+      margin: 6px 0;
+      padding: 8px;
+      border-radius: 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .btnSmall {
+      margin-left: 4px;
+      background: #e0e0e0;
+      font-size: 12px;
+      padding: 3px 5px;
+      border: 1px solid #bbb;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="panel">
+    <h3>🗺️ Rutas con Firebase</h3>
+    <label for="modoTransporte">Modo de transporte:</label>
+    <select id="modoTransporte">
+      <option value="DRIVING">🚗 Carro</option>
+      <option value="WALKING">🚶 A pie</option>
+    </select>
+    <div id="distancia"></div>
+    <button onclick="calcularRuta()">📏 Calcular ruta</button>
+    <button onclick="guardarRuta()">💾 Guardar ruta</button>
+    <button onclick="cargarRutas()">📂 Cargar rutas guardadas</button>
+    <button onclick="reiniciar()">♻️ Reiniciar todo</button>
+
+    <label>Nodos actuales:</label>
+    <div id="nodosLista">
+      <ol></ol>
+    </div>
+
+    <label>Rutas guardadas:</label>
+    <div id="rutasGuardadas">
+      <ul></ul>
+    </div>
+  </div>
+  <div id="map"></div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
+    import { getFirestore, collection, addDoc, getDocs, Timestamp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyD-j4owQXGcVgoOAT2w7CDz0uhbPeqnxfE",
+      authDomain: "final-edd.firebaseapp.com",
+      projectId: "final-edd",
+      storageBucket: "final-edd.firebasestorage.app",
+      messagingSenderId: "69059425411",
+      appId: "1:69059425411:web:9caccb1309a6e2ab0f57b6",
+      measurementId: "G-B2SZ97ZEXM"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    window.guardarRuta = async function () {
+      if (nodos.length < 2) return alert("Agrega mínimo 2 nodos.");
+      const seleccionados = nodos.filter(n => n.seleccionado);
+      const nombreRuta = prompt("Nombre de la ruta:");
+      if (!nombreRuta) return;
+      const ruta = {
+        nombre: nombreRuta,
+        fecha: Timestamp.now(),
+        distancia: distanciaTexto,
+        tiempo: tiempoTexto,
+        nodos: seleccionados.map((n, i) => ({ nombre: n.nombre, lat: n.lat, lng: n.lng, orden: i }))
+      };
+      await addDoc(collection(db, "Rutas"), ruta);
+      alert("✅ Ruta guardada.");
+    };
+
+    window.cargarRutas = async function () {
+      const querySnapshot = await getDocs(collection(db, "Rutas"));
+      const lista = document.querySelector("#rutasGuardadas ul");
+      lista.innerHTML = "";
+      querySnapshot.forEach(doc => {
+        const data = doc.data();
+        const li = document.createElement("li");
+        li.innerHTML = `<span><b>${data.nombre}</b> (${data.distancia}, ${data.tiempo})</span>
+                    <button class="btnSmall" onclick='verRuta(${JSON.stringify(data.nodos)})'>👁️ Ver</button>`;
+        lista.appendChild(li);
+      });
+    };
+
+    window.verRuta = function (nuevaRuta) {
+      nodos = nuevaRuta.map(n => ({ ...n, seleccionado: true }));
+      actualizarLista();
+      calcularRuta();
+    };
+  </script>
+
+  <script>
+    let map, nodos = [], directionsService, directionsRenderer;
+    let distanciaTexto = "", tiempoTexto = "";
+
+    function initMap() {
+      map = new google.maps.Map(document.getElementById("map"), {
+        center: { lat: 4.9195, lng: -74.03 }, zoom: 15,
+      });
+      directionsService = new google.maps.DirectionsService();
+      directionsRenderer = new google.maps.DirectionsRenderer({ map });
+      map.addListener("click", (e) => {
+        const nombre = prompt("Nombre del nodo:");
+        if (!nombre) return;
+        nodos.push({ nombre, lat: e.latLng.lat(), lng: e.latLng.lng(), seleccionado: true });
+        actualizarLista();
+      });
+    }
+
+    function actualizarLista() {
+      const lista = document.querySelector("#nodosLista ol");
+      lista.innerHTML = "";
+      nodos.forEach((n, i) => {
+        const li = document.createElement("li");
+        li.innerHTML = `<span>
+      <input type="checkbox" onchange="toggleSeleccion(${i})" ${n.seleccionado ? "checked" : ""}>
+      <b>${n.nombre}</b>
+    </span>
+    <span>
+      <button class="btnSmall" onclick="mover(${i}, -1)">⬆️</button>
+      <button class="btnSmall" onclick="mover(${i}, 1)">⬇️</button>
+      <button class="btnSmall" onclick="editar(${i})">✏️</button>
+      <button class="btnSmall" onclick="eliminar(${i})">🗑️</button>
+    </span>`;
+        lista.appendChild(li);
+      });
+    }
+
+    function toggleSeleccion(i) { nodos[i].seleccionado = !nodos[i].seleccionado; }
+
+    function mover(i, dir) {
+      const j = i + dir;
+      if (j >= 0 && j < nodos.length) {
+        [nodos[i], nodos[j]] = [nodos[j], nodos[i]];
+        actualizarLista();
+      }
+    }
+
+    function editar(i) {
+      const nuevo = prompt("Nuevo nombre:", nodos[i].nombre);
+      if (nuevo) { nodos[i].nombre = nuevo; actualizarLista(); }
+    }
+
+    function eliminar(i) { nodos.splice(i, 1); actualizarLista(); }
+
+    function reiniciar() {
+      nodos = []; directionsRenderer.set('directions', null);
+      document.getElementById("distancia").innerText = "";
+      actualizarLista();
+    }
+
+    function calcularRuta() {
+      const seleccionados = nodos.filter(n => n.seleccionado);
+      if (seleccionados.length < 2) return alert("Selecciona al menos 2 nodos.");
+      const origen = { lat: seleccionados[0].lat, lng: seleccionados[0].lng };
+      const destino = { lat: seleccionados[seleccionados.length - 1].lat, lng: seleccionados[seleccionados.length - 1].lng };
+      const waypoints = seleccionados.slice(1, -1).map(n => ({ location: { lat: n.lat, lng: n.lng }, stopover: true }));
+      const modo = document.getElementById("modoTransporte").value;
+      directionsService.route({ origin, destination, waypoints, travelMode: google.maps.TravelMode[modo] }, (result, status) => {
+        if (status === "OK") {
+          directionsRenderer.setDirections(result);
+          mostrarDistancia(result);
+        } else {
+          alert("Error: " + status);
+        }
+      });
+    }
+
+    function mostrarDistancia(result) {
+      let distancia = 0, duracion = 0;
+      result.routes[0].legs.forEach(leg => {
+        distancia += leg.distance.value;
+        duracion += leg.duration.value;
+      });
+      const km = (distancia / 1000).toFixed(2);
+      const min = Math.round(duracion / 60);
+      distanciaTexto = `${km} km`; tiempoTexto = `${min} min`;
+      document.getElementById("distancia").innerText = `📏 ${distanciaTexto} | 🕒 ${tiempoTexto}`;
+    }
+  </script>
+
+  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDt-qPqt56e08pWl0SUI4unJX7BzM35300&callback=initMap"
+    async defer></script>
+</body>
+
+</html>
